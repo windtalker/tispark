@@ -17,38 +17,20 @@
 
 package com.pingcap.tispark.statistics
 
+import java.lang
+
 import com.google.common.cache.CacheBuilder
 import com.pingcap.tikv.TiSession
-import com.pingcap.tikv.meta.{TiColumnInfo, TiIndexInfo, TiTableInfo}
+import com.pingcap.tikv.meta.TiTableInfo
 import com.pingcap.tikv.row.Row
+import com.pingcap.tikv.statistics.StatisticsHelper.{StatisticsDTO, StatisticsResult}
 import com.pingcap.tikv.statistics._
-import com.pingcap.tikv.types.DataType
-import com.pingcap.tispark.statistics.StatisticsHelper.getClass
 import org.apache.spark.sql.SparkSession
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-
-private[statistics] case class StatisticsDTO(colId: Long,
-                                             isIndex: Int,
-                                             distinct: Long,
-                                             version: Long,
-                                             nullCount: Long,
-                                             dataType: DataType,
-                                             rawCMSketch: Array[Byte],
-                                             idxInfo: TiIndexInfo,
-                                             colInfo: TiColumnInfo)
-
-private[statistics] case class StatisticsResult(histId: Long,
-                                                histogram: Histogram,
-                                                cMSketch: CMSketch,
-                                                idxInfo: TiIndexInfo,
-                                                colInfo: TiColumnInfo) {
-  def hasIdxInfo: Boolean = idxInfo != null
-
-  def hasColInfo: Boolean = colInfo != null
-}
 
 /**
  * Manager class for maintaining table statistics information cache.
@@ -101,7 +83,7 @@ class StatisticsManager(tiSession: TiSession) {
    */
   def loadStatisticsInfo(table: TiTableInfo, columns: String*): Unit = synchronized {
     require(table != null, "TableInfo should not be null")
-    if (!StatisticsHelper.isManagerReady(this)) {
+    if (!isManagerReady) {
       logger.warn(
         "Some of the statistics information table are not loaded properly, " +
           "make sure you have executed analyze table command before these information could be used by TiSpark."
@@ -129,7 +111,7 @@ class StatisticsManager(tiSession: TiSession) {
     val tblStatistic = if (statisticsMap.asMap.containsKey(tblId)) {
       statisticsMap.getIfPresent(tblId).asInstanceOf[TableStatistics]
     } else {
-      new TableStatistics(tblId)
+      new TableStatistics(table)
     }
 
     loadStatsFromStorage(tblId, tblStatistic, table, loadAll, neededColIds)
@@ -149,7 +131,10 @@ class StatisticsManager(tiSession: TiSession) {
     if (!rows.hasNext) return
 
     val requests = rows
-      .map(StatisticsHelper.extractStatisticsDTO(_, table, loadAll, neededColIds, histTable))
+      .map(
+        StatisticsHelper
+          .extractStatisticsDTO(_, table, loadAll, neededColIds.map(new lang.Long(_)), histTable)
+      )
       .filter(_ != null)
     val results = statisticsResultFromStorage(tblId, requests.toSeq)
 
@@ -157,18 +142,18 @@ class StatisticsManager(tiSession: TiSession) {
       if (result.hasIdxInfo)
         tblStatistic.getIndexHistMap
           .put(
-            result.histId,
-            new IndexStatistics(result.histogram, result.cMSketch, result.idxInfo)
+            result.getHistId,
+            new IndexStatistics(result.getHistogram, result.getcMSketch, result.getIdxInfo)
           )
       else if (result.hasColInfo)
         tblStatistic.getColumnsHistMap
           .put(
-            result.histId,
+            result.getHistId,
             new ColumnStatistics(
-              result.histogram,
-              result.cMSketch,
-              result.histogram.totalRowCount.toLong,
-              result.colInfo
+              result.getHistogram,
+              result.getcMSketch(),
+              result.getHistogram.totalRowCount.toLong,
+              result.getColInfo
             )
           )
     })
@@ -202,7 +187,7 @@ class StatisticsManager(tiSession: TiSession) {
       .map((t: (Long, List[Row])) => {
         val histId = t._1
         val rows = t._2.iterator
-        StatisticsHelper.extractStatisticResult(histId, rows, requests)
+        StatisticsHelper.extractStatisticResult(histId, rows, requests.asJava)
       })
       .filter(_ != null)
       .toSeq
@@ -220,6 +205,11 @@ class StatisticsManager(tiSession: TiSession) {
       Long.MaxValue
     }
   }
+
+  private def isManagerReady: Boolean =
+    metaTable != null &&
+      bucketTable != null &&
+      histTable != null
 }
 
 object StatisticsManager {

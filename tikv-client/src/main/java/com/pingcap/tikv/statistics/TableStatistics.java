@@ -17,6 +17,8 @@
 
 package com.pingcap.tikv.statistics;
 
+import com.pingcap.tikv.meta.TiTableInfo;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,19 +32,19 @@ import java.util.Map;
  *    (columnsHistMap, indexHistMap)
  */
 public class TableStatistics {
-  private final long tableId; // Which table it belongs to
+  private final TiTableInfo tableInfo; // Which table it belongs to
   private final Map<Long, ColumnStatistics> columnsHistMap = new HashMap<>(); // ColumnId -> ColumnStatistics map
   private final Map<Long, IndexStatistics> indexHistMap = new HashMap<>(); // IndexId -> IndexStatistics map
   private long count; // Total row count in a table.
   private long modifyCount; // Total modify count in a table.
   private long version; // Version of this statistics info
 
-  public TableStatistics(long tableId) {
-    this.tableId = tableId;
+  public TableStatistics(TiTableInfo tableInfo) {
+    this.tableInfo = tableInfo;
   }
 
-  public long getTableId() {
-    return tableId;
+  public TiTableInfo getTableInfo() {
+    return tableInfo;
   }
 
   public Map<Long, ColumnStatistics> getColumnsHistMap() {
