@@ -334,8 +334,21 @@ public class StatisticsHelper {
   public static TiDAGRequest buildHistogramsRequest(TiTableInfo histTable,
                                                     Long targetTblId,
                                                     Long startTs) {
-    return TiDAGRequest.Builder
-        .newBuilder()
+    return buildHistogramsRequest(histTable, targetTblId, startTs, null);
+  }
+
+  public static TiDAGRequest buildHistogramsRequest(TiTableInfo histTable,
+                                                    Long targetTblId,
+                                                    Long startTs,
+                                                    Long version) {
+    TiDAGRequest.Builder builder = TiDAGRequest.Builder.newBuilder();
+    if (version != null) {
+      builder.addFilter(
+          ComparisonBinaryExpression
+              .greaterThan(ColumnRef.create("version"), Constant.create(version))
+      );
+    }
+    return builder
         .setFullTableScan(histTable)
         .addFilter(
             ComparisonBinaryExpression
@@ -353,13 +366,27 @@ public class StatisticsHelper {
   public static TiDAGRequest buildMetaRequest(TiTableInfo metaTable,
                                               Long targetTblId,
                                               Long startTs) {
-    return TiDAGRequest.Builder
-        .newBuilder()
+    return buildMetaRequest(metaTable, targetTblId, startTs, null);
+  }
+
+  public static TiDAGRequest buildMetaRequest(TiTableInfo metaTable,
+                                              Long targetTblId,
+                                              Long startTs,
+                                              Long version) {
+    TiDAGRequest.Builder builder = TiDAGRequest.Builder.newBuilder();
+    if (version != null) {
+      builder.addFilter(
+          ComparisonBinaryExpression
+              .greaterThan(ColumnRef.create("version"), Constant.create(version))
+      );
+    }
+    return builder
         .setFullTableScan(metaTable)
         .addFilter(
             ComparisonBinaryExpression
                 .equal(ColumnRef.create("table_id"), Constant.create(targetTblId))
         )
+        .addOrderBy(ByItem.create(ColumnRef.create("version"), false))
         .addRequiredCols(
             Arrays.stream(metaRequiredCols)
                 .filter(c -> checkColExists(metaTable, c))

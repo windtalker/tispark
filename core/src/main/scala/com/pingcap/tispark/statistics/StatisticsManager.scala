@@ -123,7 +123,8 @@ class StatisticsManager(tiSession: TiSession) {
                                    loadAll: Boolean,
                                    neededColIds: mutable.ArrayBuffer[Long]): Unit = {
     // load count, modify_count, version info
-    loadMetaToTblStats(tblId, tblStatistic)
+    tblStatistic.loadMetaInfo()
+//    loadMetaToTblStats(tblId, tblStatistic)
     val req =
       StatisticsHelper.buildHistogramsRequest(histTable, tblId, snapshot.getTimestamp.getVersion)
 
